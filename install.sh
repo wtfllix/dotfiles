@@ -53,16 +53,44 @@ link_file() {
   info "linked $_link -> $_target"
 }
 
+has_bash_completion() {
+  for _completion in \
+    "/usr/share/bash-completion/bash_completion" \
+    "/etc/bash_completion" \
+    "/usr/local/etc/profile.d/bash_completion.sh" \
+    "/opt/homebrew/etc/profile.d/bash_completion.sh"
+  do
+    [ -r "$_completion" ] && return 0
+  done
+  return 1
+}
+
 missing_tools() {
-  _missing=
-  for _cmd in bash git vim nvim fzf tmux docker podman; do
+  _missing_recommended=
+  _missing_optional=
+
+  for _cmd in bash git fzf tmux; do
     if ! command -v "$_cmd" >/dev/null 2>&1; then
-      _missing=${_missing:+$_missing }$_cmd
+      _missing_recommended=${_missing_recommended:+$_missing_recommended }$_cmd
     fi
   done
 
-  if [ -n "$_missing" ]; then
-    warn "missing optional tools: $_missing"
+  if ! command -v vim >/dev/null 2>&1 && ! command -v nvim >/dev/null 2>&1; then
+    _missing_recommended=${_missing_recommended:+$_missing_recommended }vim-or-nvim
+  fi
+
+  if ! has_bash_completion; then
+    _missing_recommended=${_missing_recommended:+$_missing_recommended }bash-completion
+  fi
+
+  for _cmd in nvim docker podman; do
+    if ! command -v "$_cmd" >/dev/null 2>&1; then
+      _missing_optional=${_missing_optional:+$_missing_optional }$_cmd
+    fi
+  done
+
+  if [ -n "$_missing_recommended" ]; then
+    warn "missing recommended tools: $_missing_recommended"
     case " $OS_ID $OS_LIKE " in
       *debian*|*ubuntu*)
         warn "suggested packages: sudo apt install bash-completion fzf git vim tmux"
@@ -78,6 +106,10 @@ missing_tools() {
         warn "install bash-completion, fzf, git, vim or nvim, and tmux with your system package manager"
         ;;
     esac
+  fi
+
+  if [ -n "$_missing_optional" ]; then
+    info "optional integrations not found: $_missing_optional"
   fi
 }
 
@@ -110,4 +142,3 @@ main() {
 }
 
 main "$@"
-
