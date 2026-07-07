@@ -70,6 +70,33 @@ link_file() {
   info "linked $_link -> $_target"
 }
 
+link_dotfiles_dir() {
+  _link=$HOME/.dotfiles
+
+  if [ -e "$_link" ] || [ -L "$_link" ]; then
+    if [ "$DOTFILES_DIR" = "$_link" ] || [ "$_link" -ef "$DOTFILES_DIR" ] 2>/dev/null; then
+      UNCHANGED_COUNT=$((UNCHANGED_COUNT + 1))
+      note "using existing repository $_link"
+      return 0
+    fi
+
+    if [ -L "$_link" ]; then
+      _current=$(readlink -- "$_link" 2>/dev/null || true)
+      if [ "$_current" = "$DOTFILES_DIR" ]; then
+        UNCHANGED_COUNT=$((UNCHANGED_COUNT + 1))
+        note "unchanged $_link"
+        return 0
+      fi
+    fi
+
+    backup_path "$_link"
+  fi
+
+  ln -s -- "$DOTFILES_DIR" "$_link"
+  LINKED_COUNT=$((LINKED_COUNT + 1))
+  info "linked $_link -> $DOTFILES_DIR"
+}
+
 has_bash_completion() {
   for _completion in \
     "/usr/share/bash-completion/bash_completion" \
@@ -153,22 +180,7 @@ main() {
   info "dotfiles directory: $DOTFILES_DIR"
 
   section "Links"
-  if [ -e "$HOME/.dotfiles" ] || [ -L "$HOME/.dotfiles" ]; then
-    if [ "$(readlink -- "$HOME/.dotfiles" 2>/dev/null || true)" != "$DOTFILES_DIR" ]; then
-      backup_path "$HOME/.dotfiles"
-      ln -s -- "$DOTFILES_DIR" "$HOME/.dotfiles"
-      LINKED_COUNT=$((LINKED_COUNT + 1))
-      info "linked $HOME/.dotfiles -> $DOTFILES_DIR"
-    else
-      UNCHANGED_COUNT=$((UNCHANGED_COUNT + 1))
-      note "unchanged $HOME/.dotfiles"
-    fi
-  else
-    ln -s -- "$DOTFILES_DIR" "$HOME/.dotfiles"
-    LINKED_COUNT=$((LINKED_COUNT + 1))
-    info "linked $HOME/.dotfiles -> $DOTFILES_DIR"
-  fi
-
+  link_dotfiles_dir
   link_file "$DOTFILES_DIR/bashrc" "$HOME/.bashrc"
   link_file "$DOTFILES_DIR/vimrc" "$HOME/.vimrc"
   link_file "$DOTFILES_DIR/tmux.conf" "$HOME/.tmux.conf"

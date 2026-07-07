@@ -51,8 +51,16 @@ dotfiles/
 Clone the repository:
 
 ```bash
-git clone git@github.com:wtfllix/dotfiles.git ~/.dotfiles-src
-cd ~/.dotfiles-src
+git clone git@github.com:wtfllix/dotfiles.git ~/.dotfiles
+cd ~/.dotfiles
+./install.sh
+```
+
+If you have not configured SSH keys for GitHub, use HTTPS instead:
+
+```bash
+git clone https://github.com/wtfllix/dotfiles.git ~/.dotfiles
+cd ~/.dotfiles
 ./install.sh
 ```
 
@@ -65,7 +73,7 @@ source ~/.bashrc
 The installer creates these links:
 
 ```text
-~/.dotfiles  -> cloned repository
+~/.dotfiles  -> cloned repository, or symlink to it
 ~/.bashrc    -> ~/.dotfiles/bashrc
 ~/.vimrc     -> ~/.dotfiles/vimrc
 ~/.tmux.conf -> ~/.dotfiles/tmux.conf
@@ -170,4 +178,3 @@ source ~/.bashrc
 - The prompt calls Git only inside Git work trees.
 - All external tools are checked with `command -v` or readable file checks before loading.
 - The installer reports missing recommended tools, but does not install packages automatically.
-
