@@ -12,6 +12,7 @@ BACKUP_COUNT=0
 RECOMMENDED_OK=
 MISSING_RECOMMENDED=
 MISSING_OPTIONAL=
+PROXY_RESULT="not configured"
 
 info() {
   printf '  [OK]   %s\n' "$*"
@@ -47,6 +48,16 @@ backup_path() {
 
   mkdir -p -- "$BACKUP_DIR"
   mv -- "$_src" "$BACKUP_DIR/"
+  BACKUP_COUNT=$((BACKUP_COUNT + 1))
+  note "backed up $_src"
+}
+
+backup_copy_path() {
+  _src=$1
+  [ -e "$_src" ] || [ -L "$_src" ] || return 0
+
+  mkdir -p -- "$BACKUP_DIR"
+  cp -p -- "$_src" "$BACKUP_DIR/"
   BACKUP_COUNT=$((BACKUP_COUNT + 1))
   note "backed up $_src"
 }
@@ -95,6 +106,139 @@ link_dotfiles_dir() {
   ln -s -- "$DOTFILES_DIR" "$_link"
   LINKED_COUNT=$((LINKED_COUNT + 1))
   info "linked $_link -> $DOTFILES_DIR"
+}
+
+shell_quote() {
+  _value=$1
+  printf "'"
+  printf '%s' "$_value" | sed "s/'/'\\\\''/g"
+  printf "'"
+}
+
+has_managed_proxy_block() {
+  [ -r "$HOME/.bashrc.local" ] || return 1
+  grep -q '^# >>> dotfiles proxy >>>$' "$HOME/.bashrc.local"
+}
+
+write_proxy_config() {
+  _enable_proxy=$1
+  _proxy_scheme=${2:-http}
+  _proxy_host=${3:-127.0.0.1}
+  _proxy_port=${4:-7892}
+  _proxy_no_proxy=${5:-localhost,127.0.0.1,::1,10.0.0.0/8,192.168.0.0/16,172.16.0.0/12}
+  _local_rc=$HOME/.bashrc.local
+  _tmp_rc=$(mktemp "${TMPDIR:-/tmp}/bashrc.local.XXXXXX") || return 1
+
+  if [ -e "$_local_rc" ] || [ -L "$_local_rc" ]; then
+    backup_copy_path "$_local_rc"
+    if ! sed '/^# >>> dotfiles proxy >>>$/,/^# <<< dotfiles proxy <<<$/d' "$_local_rc" > "$_tmp_rc"; then
+      rm -f -- "$_tmp_rc"
+      warn "failed to update $_local_rc"
+      return 1
+    fi
+  else
+    : > "$_tmp_rc"
+  fi
+
+  if [ "$_enable_proxy" = "1" ]; then
+    {
+      printf '\n# >>> dotfiles proxy >>>\n'
+      printf '# Managed by dotfiles/install.sh. Edit by rerunning install.sh.\n'
+      printf 'export DOTFILES_PROXY_SCHEME=%s\n' "$(shell_quote "$_proxy_scheme")"
+      printf 'export DOTFILES_PROXY_HOST=%s\n' "$(shell_quote "$_proxy_host")"
+      printf 'export DOTFILES_PROXY_PORT=%s\n' "$(shell_quote "$_proxy_port")"
+      printf 'export DOTFILES_PROXY_NO_PROXY=%s\n' "$(shell_quote "$_proxy_no_proxy")"
+      printf 'proxy_on >/dev/null\n'
+      printf '# <<< dotfiles proxy <<<\n'
+    } >> "$_tmp_rc"
+    PROXY_RESULT="enabled: $_proxy_scheme://$_proxy_host:$_proxy_port"
+  else
+    PROXY_RESULT="disabled"
+  fi
+
+  mv -- "$_tmp_rc" "$_local_rc"
+  chmod 600 "$_local_rc" 2>/dev/null || true
+}
+
+prompt_proxy_config() {
+  section "Proxy"
+
+  if [ ! -t 0 ]; then
+    note "skipped proxy prompt because stdin is not interactive"
+    return 0
+  fi
+
+  printf 'Enable proxy automatically for new interactive shells? [y/N]: '
+  read -r _proxy_answer
+
+  case $_proxy_answer in
+    y|Y|yes|YES)
+      _proxy_scheme=${DOTFILES_PROXY_SCHEME:-http}
+      _proxy_host=${DOTFILES_PROXY_HOST:-127.0.0.1}
+      _proxy_port=${DOTFILES_PROXY_PORT:-7892}
+      _proxy_no_proxy=${DOTFILES_PROXY_NO_PROXY:-localhost,127.0.0.1,::1,10.0.0.0/8,192.168.0.0/16,172.16.0.0/12}
+
+      printf 'Proxy scheme [%s]: ' "$_proxy_scheme"
+      read -r _input
+      [ -n "$_input" ] && _proxy_scheme=$_input
+
+      case $_proxy_scheme in
+        http|https|socks5|socks5h) ;;
+        *)
+          warn "unsupported proxy scheme: $_proxy_scheme"
+          warn "allowed values: http, https, socks5, socks5h"
+          return 1
+          ;;
+      esac
+
+      printf 'Proxy host [%s]: ' "$_proxy_host"
+      read -r _input
+      [ -n "$_input" ] && _proxy_host=$_input
+
+      printf 'Proxy port [%s]: ' "$_proxy_port"
+      read -r _input
+      [ -n "$_input" ] && _proxy_port=$_input
+
+      case $_proxy_port in
+        ''|*[!0-9]*)
+          warn "proxy port must be numeric"
+          return 1
+          ;;
+      esac
+
+      printf 'NO_PROXY [%s]: ' "$_proxy_no_proxy"
+      read -r _input
+      [ -n "$_input" ] && _proxy_no_proxy=$_input
+
+      if write_proxy_config 1 "$_proxy_scheme" "$_proxy_host" "$_proxy_port" "$_proxy_no_proxy"; then
+        info "proxy auto-enable configured"
+      else
+        warn "proxy auto-enable was not configured"
+      fi
+      ;;
+    *)
+      if has_managed_proxy_block; then
+        printf 'Existing dotfiles proxy auto-enable found. Disable it? [Y/n]: '
+        read -r _disable_answer
+        case $_disable_answer in
+          n|N|no|NO)
+            PROXY_RESULT="kept existing setting"
+            note "kept existing proxy configuration"
+            ;;
+          *)
+            if write_proxy_config 0; then
+              info "proxy auto-enable disabled"
+            else
+              warn "proxy auto-enable was not changed"
+            fi
+            ;;
+        esac
+      else
+        PROXY_RESULT="not enabled"
+        note "proxy auto-enable not enabled"
+      fi
+      ;;
+  esac
 }
 
 has_bash_completion() {
@@ -189,6 +333,8 @@ main() {
   missing_tools
   [ -n "$RECOMMENDED_OK" ] && info "recommended tools ready: $RECOMMENDED_OK"
 
+  prompt_proxy_config
+
   section "Summary"
   info "completed: $LINKED_COUNT linked, $UNCHANGED_COUNT unchanged, $BACKUP_COUNT backed up"
   if [ -n "$MISSING_RECOMMENDED" ]; then
@@ -202,6 +348,7 @@ main() {
   else
     note "no backups were needed"
   fi
+  info "proxy: $PROXY_RESULT"
   info "next step: open a new shell or run: source ~/.bashrc"
 }
 

@@ -128,13 +128,51 @@ For host-specific private settings, keep them outside the repository:
 ~/.bashrc.local
 ```
 
-If needed, add this to the end of `bashrc`:
+`bashrc` loads this file automatically when it exists. Use it for secrets, private aliases, host-specific environment variables, proxy auto-enable, or internal paths.
 
-```bash
-[ -r "$HOME/.bashrc.local" ] && . "$HOME/.bashrc.local"
+## Proxy
+
+The installer asks whether proxy should be enabled automatically for new interactive shells.
+
+Default proxy:
+
+```text
+http://127.0.0.1:7892
 ```
 
-Use this for secrets, private aliases, host-specific environment variables, or internal paths.
+If enabled, the installer writes a managed block to:
+
+```bash
+~/.bashrc.local
+```
+
+The repository only provides the functions:
+
+```bash
+proxy_on
+proxy_off
+proxy_status
+```
+
+Manual usage:
+
+```bash
+proxy_on
+proxy_on http://127.0.0.1:7892
+proxy_status
+proxy_off
+```
+
+Supported auto-config schemes:
+
+```text
+http
+https
+socks5
+socks5h
+```
+
+Rerun `./install.sh` to change or disable the managed proxy auto-enable block.
 
 ## Safe Aliases
 

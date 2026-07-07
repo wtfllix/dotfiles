@@ -46,6 +46,9 @@ do
 done
 unset _df_module
 
+# Host-specific settings are intentionally kept out of Git.
+[ -r "$HOME/.bashrc.local" ] && . "$HOME/.bashrc.local"
+
 # ble.sh is intentionally loaded last because it wraps readline behavior.
 if [ -z "${BLE_VERSION:-}" ]; then
   for _df_blesh in \
@@ -63,4 +66,3 @@ if [ -z "${BLE_VERSION:-}" ]; then
   done
   unset _df_blesh
 fi
-
