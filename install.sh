@@ -6,13 +6,27 @@ set -u
 
 DOTFILES_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 BACKUP_DIR=$HOME/.dotfiles-backup/$(date +%Y%m%d-%H%M%S)
+LINKED_COUNT=0
+UNCHANGED_COUNT=0
+BACKUP_COUNT=0
+RECOMMENDED_OK=
+MISSING_RECOMMENDED=
+MISSING_OPTIONAL=
 
 info() {
-  printf '[info] %s\n' "$*"
+  printf '  [OK]   %s\n' "$*"
 }
 
 warn() {
-  printf '[warn] %s\n' "$*" >&2
+  printf '  [WARN] %s\n' "$*" >&2
+}
+
+note() {
+  printf '  [..]   %s\n' "$*"
+}
+
+section() {
+  printf '\n==> %s\n' "$*"
 }
 
 detect_os() {
@@ -33,7 +47,8 @@ backup_path() {
 
   mkdir -p -- "$BACKUP_DIR"
   mv -- "$_src" "$BACKUP_DIR/"
-  info "backed up $_src to $BACKUP_DIR/"
+  BACKUP_COUNT=$((BACKUP_COUNT + 1))
+  note "backed up $_src"
 }
 
 link_file() {
@@ -43,13 +58,15 @@ link_file() {
   if [ -L "$_link" ]; then
     _current=$(readlink -- "$_link" 2>/dev/null || true)
     if [ "$_current" = "$_target" ]; then
-      info "already linked $_link"
+      UNCHANGED_COUNT=$((UNCHANGED_COUNT + 1))
+      note "unchanged $_link"
       return 0
     fi
   fi
 
   backup_path "$_link"
   ln -s -- "$_target" "$_link"
+  LINKED_COUNT=$((LINKED_COUNT + 1))
   info "linked $_link -> $_target"
 }
 
@@ -68,19 +85,28 @@ has_bash_completion() {
 missing_tools() {
   _missing_recommended=
   _missing_optional=
+  _recommended_ok=
 
   for _cmd in bash git fzf tmux; do
     if ! command -v "$_cmd" >/dev/null 2>&1; then
       _missing_recommended=${_missing_recommended:+$_missing_recommended }$_cmd
+    else
+      _recommended_ok=${_recommended_ok:+$_recommended_ok }$_cmd
     fi
   done
 
   if ! command -v vim >/dev/null 2>&1 && ! command -v nvim >/dev/null 2>&1; then
     _missing_recommended=${_missing_recommended:+$_missing_recommended }vim-or-nvim
+  elif command -v nvim >/dev/null 2>&1; then
+    _recommended_ok=${_recommended_ok:+$_recommended_ok }nvim
+  else
+    _recommended_ok=${_recommended_ok:+$_recommended_ok }vim
   fi
 
   if ! has_bash_completion; then
     _missing_recommended=${_missing_recommended:+$_missing_recommended }bash-completion
+  else
+    _recommended_ok=${_recommended_ok:+$_recommended_ok }bash-completion
   fi
 
   for _cmd in nvim docker podman; do
@@ -88,6 +114,10 @@ missing_tools() {
       _missing_optional=${_missing_optional:+$_missing_optional }$_cmd
     fi
   done
+
+  RECOMMENDED_OK=$_recommended_ok
+  MISSING_RECOMMENDED=$_missing_recommended
+  MISSING_OPTIONAL=$_missing_optional
 
   if [ -n "$_missing_recommended" ]; then
     warn "missing recommended tools: $_missing_recommended"
@@ -109,25 +139,33 @@ missing_tools() {
   fi
 
   if [ -n "$_missing_optional" ]; then
-    info "optional integrations not found: $_missing_optional"
+    note "optional integrations not found: $_missing_optional"
   fi
 }
 
 main() {
+  printf 'Dotfiles installer\n'
+  printf 'This script creates symlinks only. It will not install packages.\n'
+
+  section "System"
   detect_os
   info "detected system: $OS_ID ${OS_LIKE:+($OS_LIKE)}"
   info "dotfiles directory: $DOTFILES_DIR"
 
+  section "Links"
   if [ -e "$HOME/.dotfiles" ] || [ -L "$HOME/.dotfiles" ]; then
     if [ "$(readlink -- "$HOME/.dotfiles" 2>/dev/null || true)" != "$DOTFILES_DIR" ]; then
       backup_path "$HOME/.dotfiles"
       ln -s -- "$DOTFILES_DIR" "$HOME/.dotfiles"
+      LINKED_COUNT=$((LINKED_COUNT + 1))
       info "linked $HOME/.dotfiles -> $DOTFILES_DIR"
     else
-      info "already linked $HOME/.dotfiles"
+      UNCHANGED_COUNT=$((UNCHANGED_COUNT + 1))
+      note "unchanged $HOME/.dotfiles"
     fi
   else
     ln -s -- "$DOTFILES_DIR" "$HOME/.dotfiles"
+    LINKED_COUNT=$((LINKED_COUNT + 1))
     info "linked $HOME/.dotfiles -> $DOTFILES_DIR"
   fi
 
@@ -135,10 +173,24 @@ main() {
   link_file "$DOTFILES_DIR/vimrc" "$HOME/.vimrc"
   link_file "$DOTFILES_DIR/tmux.conf" "$HOME/.tmux.conf"
 
+  section "Tools"
   missing_tools
+  [ -n "$RECOMMENDED_OK" ] && info "recommended tools ready: $RECOMMENDED_OK"
 
-  info "done. Open a new shell or run: source ~/.bashrc"
-  info "existing files were backed up under $BACKUP_DIR when needed"
+  section "Summary"
+  info "completed: $LINKED_COUNT linked, $UNCHANGED_COUNT unchanged, $BACKUP_COUNT backed up"
+  if [ -n "$MISSING_RECOMMENDED" ]; then
+    warn "recommended tools still missing: $MISSING_RECOMMENDED"
+  else
+    info "all recommended tools are available"
+  fi
+  [ -n "$MISSING_OPTIONAL" ] && note "optional tools skipped: $MISSING_OPTIONAL"
+  if [ "$BACKUP_COUNT" -gt 0 ]; then
+    info "backup directory: $BACKUP_DIR"
+  else
+    note "no backups were needed"
+  fi
+  info "next step: open a new shell or run: source ~/.bashrc"
 }
 
 main "$@"
