@@ -121,7 +121,7 @@ has_managed_proxy_block() {
 }
 
 write_proxy_config() {
-  _enable_proxy=$1
+  _proxy_mode=$1
   _proxy_scheme=${2:-http}
   _proxy_host=${3:-127.0.0.1}
   _proxy_port=${4:-7892}
@@ -140,20 +140,25 @@ write_proxy_config() {
     : > "$_tmp_rc"
   fi
 
-  if [ "$_enable_proxy" = "1" ]; then
+  if [ "$_proxy_mode" = "auto" ] || [ "$_proxy_mode" = "prompt" ]; then
     {
       printf '\n# >>> dotfiles proxy >>>\n'
       printf '# Managed by dotfiles/install.sh. Edit by rerunning install.sh.\n'
+      printf 'export DOTFILES_PROXY_MODE=%s\n' "$(shell_quote "$_proxy_mode")"
       printf 'export DOTFILES_PROXY_SCHEME=%s\n' "$(shell_quote "$_proxy_scheme")"
       printf 'export DOTFILES_PROXY_HOST=%s\n' "$(shell_quote "$_proxy_host")"
       printf 'export DOTFILES_PROXY_PORT=%s\n' "$(shell_quote "$_proxy_port")"
       printf 'export DOTFILES_PROXY_NO_PROXY=%s\n' "$(shell_quote "$_proxy_no_proxy")"
-      printf 'proxy_on >/dev/null\n'
+      if [ "$_proxy_mode" = "auto" ]; then
+        printf 'proxy_on >/dev/null\n'
+      else
+        printf 'proxy_prompt\n'
+      fi
       printf '# <<< dotfiles proxy <<<\n'
     } >> "$_tmp_rc"
-    PROXY_RESULT="enabled: $_proxy_scheme://$_proxy_host:$_proxy_port"
+    PROXY_RESULT="$_proxy_mode: $_proxy_scheme://$_proxy_host:$_proxy_port"
   else
-    PROXY_RESULT="disabled"
+    PROXY_RESULT="off"
   fi
 
   mv -- "$_tmp_rc" "$_local_rc"
@@ -168,11 +173,23 @@ prompt_proxy_config() {
     return 0
   fi
 
-  printf 'Enable proxy automatically for new interactive shells? [y/N]: '
-  read -r _proxy_answer
+  printf 'Proxy mode for new interactive shells: auto, prompt, off [auto]: '
+  read -r _proxy_mode
+  [ -z "$_proxy_mode" ] && _proxy_mode=auto
 
-  case $_proxy_answer in
-    y|Y|yes|YES)
+  case $_proxy_mode in
+    auto|AUTO) _proxy_mode=auto ;;
+    prompt|PROMPT|ask|ASK) _proxy_mode=prompt ;;
+    off|OFF|n|N|no|NO) _proxy_mode=off ;;
+    *)
+      warn "unsupported proxy mode: $_proxy_mode"
+      warn "allowed values: auto, prompt, off"
+      return 1
+      ;;
+  esac
+
+  case $_proxy_mode in
+    auto|prompt)
       _proxy_scheme=${DOTFILES_PROXY_SCHEME:-http}
       _proxy_host=${DOTFILES_PROXY_HOST:-127.0.0.1}
       _proxy_port=${DOTFILES_PROXY_PORT:-7892}
@@ -210,32 +227,26 @@ prompt_proxy_config() {
       read -r _input
       [ -n "$_input" ] && _proxy_no_proxy=$_input
 
-      if write_proxy_config 1 "$_proxy_scheme" "$_proxy_host" "$_proxy_port" "$_proxy_no_proxy"; then
-        info "proxy auto-enable configured"
+      if write_proxy_config "$_proxy_mode" "$_proxy_scheme" "$_proxy_host" "$_proxy_port" "$_proxy_no_proxy"; then
+        if [ "$_proxy_mode" = "auto" ]; then
+          info "proxy will be enabled automatically for new shells"
+        else
+          info "proxy prompt configured for new shells"
+        fi
       else
-        warn "proxy auto-enable was not configured"
+        warn "proxy configuration was not changed"
       fi
       ;;
     *)
       if has_managed_proxy_block; then
-        printf 'Existing dotfiles proxy auto-enable found. Disable it? [Y/n]: '
-        read -r _disable_answer
-        case $_disable_answer in
-          n|N|no|NO)
-            PROXY_RESULT="kept existing setting"
-            note "kept existing proxy configuration"
-            ;;
-          *)
-            if write_proxy_config 0; then
-              info "proxy auto-enable disabled"
-            else
-              warn "proxy auto-enable was not changed"
-            fi
-            ;;
-        esac
+        if write_proxy_config off; then
+          info "proxy auto handling disabled"
+        else
+          warn "proxy configuration was not changed"
+        fi
       else
-        PROXY_RESULT="not enabled"
-        note "proxy auto-enable not enabled"
+        PROXY_RESULT="off"
+        note "proxy auto handling not enabled"
       fi
       ;;
   esac

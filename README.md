@@ -22,6 +22,7 @@
   - `docker`
   - `podman`
 - 简洁服务器风格 prompt：
+  - 时分秒
   - `user@host`
   - 当前路径
   - Git branch
@@ -132,7 +133,7 @@ For host-specific private settings, keep them outside the repository:
 
 ## Proxy
 
-The installer asks whether proxy should be enabled automatically for new interactive shells.
+The installer asks how proxy should behave for new interactive shells.
 
 Default proxy:
 
@@ -151,7 +152,16 @@ The repository only provides the functions:
 ```bash
 proxy_on
 proxy_off
+proxy_prompt
 proxy_status
+```
+
+Install-time modes:
+
+```text
+auto    Enable proxy automatically for every new interactive shell. This is the default.
+prompt  Ask whether to enable proxy when opening a new interactive shell or SSH session.
+off     Do not enable or ask automatically. Manual functions are still available.
 ```
 
 Manual usage:
@@ -159,6 +169,7 @@ Manual usage:
 ```bash
 proxy_on
 proxy_on http://127.0.0.1:7892
+proxy_prompt
 proxy_status
 proxy_off
 ```
@@ -172,7 +183,7 @@ socks5
 socks5h
 ```
 
-Rerun `./install.sh` to change or disable the managed proxy auto-enable block.
+Rerun `./install.sh` to change proxy mode, address, port, or `NO_PROXY`.
 
 ## Safe Aliases
 

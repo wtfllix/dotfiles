@@ -1,4 +1,4 @@
-# Compact server-friendly prompt with user, host, path, and optional Git branch.
+# Compact server-friendly prompt with time, user, host, path, and optional Git branch.
 
 __df_git_branch() {
   command -v git >/dev/null 2>&1 || return 0
@@ -13,6 +13,7 @@ __df_git_branch() {
 __df_set_prompt() {
   # Color escape sequences must be wrapped in \[...\] so readline counts columns.
   _df_reset='\[\e[0m\]'
+  _df_time='\[\e[90m\]'
   _df_path='\[\e[34m\]'
   _df_git='\[\e[33m\]'
 
@@ -24,10 +25,9 @@ __df_set_prompt() {
     _df_symbol='$'
   fi
 
-  PS1="${_df_user}\u@\h${_df_reset}:${_df_path}\w${_df_reset}${_df_git}"'$(__df_git_branch)'"${_df_reset} ${_df_symbol} "
-  unset _df_reset _df_path _df_git _df_user _df_symbol
+  PS1="${_df_time}[\t]${_df_reset} ${_df_user}\u@\h${_df_reset}:${_df_path}\w${_df_reset}${_df_git}"'$(__df_git_branch)'"${_df_reset} ${_df_symbol} "
+  unset _df_reset _df_time _df_path _df_git _df_user _df_symbol
 }
 
 __df_set_prompt
 unset -f __df_set_prompt
-

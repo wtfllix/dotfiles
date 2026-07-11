@@ -95,6 +95,31 @@ proxy_status() {
   fi
 }
 
+# Ask whether to enable proxy for the current interactive shell.
+# Empty answer enables proxy, which is convenient for SSH login sessions.
+proxy_prompt() {
+  [ -t 0 ] && [ -t 1 ] || return 0
+
+  _proxy_scheme=${DOTFILES_PROXY_SCHEME:-http}
+  _proxy_host=${DOTFILES_PROXY_HOST:-127.0.0.1}
+  _proxy_port=${DOTFILES_PROXY_PORT:-7892}
+  _proxy_url=$_proxy_scheme://$_proxy_host:$_proxy_port
+
+  printf 'Enable proxy for this shell? [%s] [Y/n]: ' "$_proxy_url"
+  read -r _proxy_answer
+
+  case $_proxy_answer in
+    n|N|no|NO)
+      proxy_off
+      ;;
+    *)
+      proxy_on "$_proxy_url"
+      ;;
+  esac
+
+  unset _proxy_scheme _proxy_host _proxy_port _proxy_url _proxy_answer
+}
+
 # Append a command to PROMPT_COMMAND without clobbering existing hooks.
 __df_prompt_command_add() {
   case ";${PROMPT_COMMAND:-};" in
