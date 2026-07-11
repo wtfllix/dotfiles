@@ -195,7 +195,12 @@ prompt_proxy_config() {
       _proxy_port=${DOTFILES_PROXY_PORT:-7892}
       _proxy_no_proxy=${DOTFILES_PROXY_NO_PROXY:-localhost,127.0.0.1,::1,10.0.0.0/8,192.168.0.0/16,172.16.0.0/12}
 
-      printf 'Proxy scheme [%s]: ' "$_proxy_scheme"
+      note "proxy examples:"
+      note "  HTTP local proxy:  scheme=http,   host=127.0.0.1, port=7892"
+      note "  SOCKS5 proxy:      scheme=socks5, host=127.0.0.1, port=7892"
+      note "press Enter to keep the default shown in brackets"
+
+      printf 'Proxy scheme: http, https, socks5, socks5h [%s]: ' "$_proxy_scheme"
       read -r _input
       [ -n "$_input" ] && _proxy_scheme=$_input
 
